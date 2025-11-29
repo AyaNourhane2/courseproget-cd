@@ -15,7 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get(
     'SECRET_KEY', 
-    'django-insecure-render-docker-course-api-2025-aya-norhane-secret-key-change-in-production'
+    'django-insecure-render-docker-course-api-2025-aya-norhane-secure-key-123456'
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -27,6 +27,8 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     '.onrender.com',
     'courseproget-cd.onrender.com',
+    '0.0.0.0',  # For Docker
+    'web',      # For Docker internal networking
 ]
 
 # Add Render external hostname
@@ -54,9 +56,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # For static files
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # CORS
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -84,28 +86,37 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'course_project.wsgi.application'
 
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+# Database Configuration
+# Use PostgreSQL for production, SQLite for development
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# PostgreSQL configuration for Render
-DATABASES = {
-    'default': dj_database_url.config(
-        default='postgresql://database_postgress_viej_user:s3QC7gSIaONm5myCujiiS3RD1wZ5sxHQ@dpg-d4eodm9r0fns73brnvng-a.oregon-postgres.render.com:5432/database_postgress_viej',
-        conn_max_age=600,
-        conn_health_checks=True,
-        ssl_require=True
-    )
-}
+if DATABASE_URL:
+    # PostgreSQL configuration for Render
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=True
+        )
+    }
+    # Ensure PostgreSQL engine is used
+    DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
+else:
+    # SQLite for development when no DATABASE_URL is provided
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
-# Database optimization for PostgreSQL
-DATABASES['default']['ENGINE'] = 'django.db.backends.postgresql'
+# Database optimization
 DATABASES['default']['OPTIONS'] = {
     'connect_timeout': 30,
 }
 
 # Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -122,42 +133,32 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
-
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Ensure static directory exists
 os.makedirs(STATIC_ROOT, exist_ok=True)
 
-# Extra places for collectstatic to find static files.
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
-
 # WhiteNoise configuration for static files
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+# For better performance, use ManifestStaticFilesStorage in production
+if not DEBUG:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Django REST Framework configuration
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # For API access
+        'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
@@ -184,19 +185,23 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
-        'user': '1000/hour'
+        'anon': '1000/day',
+        'user': '10000/day'
     }
 }
 
 # CORS (Cross-Origin Resource Sharing) settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development - restrict in production
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
     "https://courseproget-cd.onrender.com",
 ]
+
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -205,6 +210,7 @@ CORS_ALLOW_METHODS = [
     'POST',
     'PUT',
 ]
+
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -230,6 +236,11 @@ LOGGING = {
             'format': '{levelname} {message}',
             'style': '{',
         },
+        'django.server': {
+            '()': 'django.utils.log.ServerFormatter',
+            'format': '[{server_time}] {message}',
+            'style': '{',
+        }
     },
     'handlers': {
         'console': {
@@ -248,13 +259,18 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
             'propagate': False,
         },
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
         'courses': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
     },
@@ -280,10 +296,10 @@ if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
     
-    # Content Security Policy (basic)
+    # Content Security Policy
     SECURE_REFERRER_POLICY = 'same-origin'
 
-# Cache configuration (using local memory cache for simplicity)
+# Cache configuration
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -291,18 +307,15 @@ CACHES = {
     }
 }
 
-# Email configuration (using console backend for development)
+# Email configuration
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Custom settings
 API_VERSION = '1.0'
 PROJECT_NAME = 'Course Management API'
 
-# Django Admin URL (for security)
+# Django Admin URL
 ADMIN_URL = 'admin/'
-
-# Custom user model (if needed in future)
-# AUTH_USER_MODEL = 'users.CustomUser'
 
 # File upload settings
 MEDIA_URL = '/media/'
@@ -313,7 +326,7 @@ MAX_UPLOAD_SIZE = 5242880  # 5MB
 if DEBUG:
     INSTALLED_APPS += ['debug_toolbar']
     MIDDLEWARE.insert(0, 'debug_toolbar.middleware.DebugToolbarMiddleware')
-    INTERNAL_IPS = ['127.0.0.1']
+    INTERNAL_IPS = ['127.0.0.1', 'localhost', '0.0.0.0']
 
 # Docker specific settings
 import socket
@@ -328,15 +341,20 @@ except:
 # Gunicorn configuration
 WSGI_APPLICATION = 'course_project.wsgi.application'
 
-# Health check endpoint
+# Health check settings
 HEALTH_CHECK = {
-    'DISK_USAGE_MAX': 90,  # 90%
-    'MEMORY_MIN': 100,     # 100MB
+    'DISK_USAGE_MAX': 90,
+    'MEMORY_MIN': 100,
 }
 
 # Application performance monitoring
 if not DEBUG:
-    # Add your monitoring service here (e.g., Sentry, New Relic)
+    # Add your monitoring service here
     pass
 
-print(f"✅ Settings loaded successfully - DEBUG: {DEBUG}, Database: {DATABASES['default']['ENGINE']}")
+# Print configuration info (for debugging)
+print(f"✅ Django Settings Loaded Successfully")
+print(f"📊 DEBUG: {DEBUG}")
+print(f"🌐 ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+print(f"🗄️ Database: {DATABASES['default']['ENGINE']}")
+print(f"🔧 Static Files: {STATICFILES_STORAGE}")

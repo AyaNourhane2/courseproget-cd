@@ -5,8 +5,9 @@ ENV PYTHONUNBUFFERED 1
 
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc python3-dev \
+RUN apt-get update && apt-get install -y \
+    gcc \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -17,12 +18,6 @@ COPY . .
 
 RUN mkdir -p staticfiles
 
-# Run migrations
-RUN python manage.py migrate
-
-# Skip collectstatic in build - do it at runtime
-# RUN python manage.py collectstatic --noinput --clear || true
-
 EXPOSE $PORT
 
-CMD python manage.py collectstatic --noinput --clear; gunicorn --bind 0.0.0.0:$PORT course_project.wsgi:application
+CMD sh -c "python manage.py migrate && python manage.py collectstatic --noinput --clear && gunicorn --bind 0.0.0.0:$PORT course_project.wsgi:application"
