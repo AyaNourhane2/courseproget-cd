@@ -11,7 +11,7 @@ mkdir -p staticfiles
 # Apply database migrations
 python manage.py migrate
 
-# Collect static files (continue even if it fails)
-python manage.py collectstatic --no-input --clear || true
+# Collect static files
+python manage.py collectstatic --no-input --clear
 
 echo "Build completed successfully!"
